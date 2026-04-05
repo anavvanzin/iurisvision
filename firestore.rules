@@ -1,0 +1,103 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUserProfile() {
+      return hasRequiredFields(['uid', 'email', 'xp', 'level', 'createdAt']) &&
+             request.resource.data.uid is string &&
+             request.resource.data.email is string &&
+             request.resource.data.xp is number && request.resource.data.xp >= 0 &&
+             request.resource.data.level is number && request.resource.data.level >= 1 &&
+             request.resource.data.createdAt is timestamp;
+    }
+
+    function isValidDocument() {
+      return hasRequiredFields(['userId', 'title', 'content', 'createdAt']) &&
+             request.resource.data.userId is string &&
+             request.resource.data.title is string && request.resource.data.title.size() <= 200 &&
+             request.resource.data.content is string && request.resource.data.content.size() <= 100000 &&
+             request.resource.data.createdAt is timestamp;
+    }
+
+    function isValidMilestone() {
+      return hasRequiredFields(['userId', 'title', 'date', 'completed', 'createdAt']) &&
+             request.resource.data.userId is string &&
+             request.resource.data.title is string && request.resource.data.title.size() <= 200 &&
+             request.resource.data.date is string &&
+             request.resource.data.completed is bool &&
+             request.resource.data.createdAt is timestamp;
+    }
+
+    function isValidTodo() {
+      return hasRequiredFields(['userId', 'title', 'completed', 'createdAt']) &&
+             request.resource.data.userId is string &&
+             request.resource.data.title is string && request.resource.data.title.size() <= 200 &&
+             request.resource.data.completed is bool &&
+             request.resource.data.createdAt is timestamp;
+    }
+
+    function isValidSession() {
+      return hasRequiredFields(['userId', 'type', 'duration', 'timestamp', 'createdAt']) &&
+             request.resource.data.userId is string &&
+             request.resource.data.type in ['work', 'break'] &&
+             request.resource.data.duration is number && request.resource.data.duration > 0 &&
+             request.resource.data.timestamp is string &&
+             request.resource.data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserProfile() && request.resource.data.uid == userId;
+      allow update: if isOwner(userId) && isValidUserProfile() && request.resource.data.uid == resource.data.uid && request.resource.data.createdAt == resource.data.createdAt;
+      
+      match /documents/{documentId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidDocument() && request.resource.data.userId == userId;
+        allow update: if isOwner(userId) && isValidDocument() && request.resource.data.userId == resource.data.userId && request.resource.data.createdAt == resource.data.createdAt;
+      }
+      
+      match /milestones/{milestoneId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidMilestone() && request.resource.data.userId == userId;
+        allow update: if isOwner(userId) && isValidMilestone() && request.resource.data.userId == resource.data.userId && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /todos/{todoId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTodo() && request.resource.data.userId == userId;
+        allow update: if isOwner(userId) && isValidTodo() && request.resource.data.userId == resource.data.userId && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /sessions/{sessionId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidSession() && request.resource.data.userId == userId;
+        allow update: if isOwner(userId) && isValidSession() && request.resource.data.userId == resource.data.userId && request.resource.data.createdAt == resource.data.createdAt;
+      }
+    }
+  }
+}

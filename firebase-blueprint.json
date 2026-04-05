@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User gamification and profile data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID" },
+        "email": { "type": "string", "description": "User email" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "xp": { "type": "number", "description": "Experience points" },
+        "level": { "type": "number", "description": "Current level" },
+        "badges": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Unlocked badges"
+        },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["uid", "email", "xp", "level", "createdAt"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Knowledge base document",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "title", "content", "createdAt"]
+    },
+    "Milestone": {
+      "title": "Milestone",
+      "description": "Thesis milestone",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "subtasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "completed": { "type": "boolean" }
+            }
+          }
+        },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "title", "date", "completed", "createdAt"]
+    },
+    "Todo": {
+      "title": "Todo",
+      "description": "Simple to-do item",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "title", "completed", "createdAt"]
+    },
+    "PomodoroSession": {
+      "title": "PomodoroSession",
+      "description": "Pomodoro focus/break session",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["work", "break"] },
+        "duration": { "type": "number" },
+        "timestamp": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "type", "duration", "timestamp", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles"
+    },
+    "/users/{userId}/documents/{documentId}": {
+      "schema": "Document",
+      "description": "User's knowledge base documents"
+    },
+    "/users/{userId}/milestones/{milestoneId}": {
+      "schema": "Milestone",
+      "description": "User's thesis milestones"
+    },
+    "/users/{userId}/todos/{todoId}": {
+      "schema": "Todo",
+      "description": "User's to-do list"
+    },
+    "/users/{userId}/sessions/{sessionId}": {
+      "schema": "PomodoroSession",
+      "description": "User's pomodoro sessions"
+    }
+  }
+}
