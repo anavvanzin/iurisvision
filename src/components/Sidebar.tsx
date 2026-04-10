@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { cn } from '@/src/lib/utils';
-import { LayoutDashboard, ListTodo, AlertTriangle, CalendarDays, Bot, FileText, Target, X, BookOpen, Network, LogOut, Trophy, Globe } from 'lucide-react';
+import { LayoutDashboard, ListTodo, AlertTriangle, CalendarDays, Bot, FileText, Target, X, BookOpen, Network, LogOut, Trophy, Globe, Layers, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../lib/AuthContext';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { VirtualPlant } from './VirtualPlant';
 
-export type TabType = 'overview' | 'phases' | 'risks' | 'timeline' | 'ai' | 'thesis' | 'knowledge' | 'map' | 'corpus';
+export type TabType = 'overview' | 'phases' | 'risks' | 'timeline' | 'ai' | 'thesis' | 'knowledge' | 'map' | 'corpus' | 'atlas' | 'defense';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -34,6 +34,8 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }: SidebarP
     { id: 'risks', label: 'Riscos & Mitigação', icon: AlertTriangle },
     { id: 'thesis', label: 'Tese Tracker', icon: Target },
     { id: 'knowledge', label: 'Base de Conhecimento', icon: BookOpen },
+    { id: 'atlas', label: 'Atlas Mnemosyne', icon: Layers },
+    { id: 'defense', label: 'Simulador de Banca', icon: ShieldCheck },
     { id: 'corpus', label: 'Explorador de Corpus', icon: Globe },
     { id: 'map', label: 'Mapa de Conexões', icon: Network },
     { id: 'ai', label: 'Assistente IA', icon: Bot },

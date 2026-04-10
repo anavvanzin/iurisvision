@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, CheckSquare, Square, Target, Maximize2, Minimize2, PenTool, Calendar, Bot, Loader2, History, Wand2, FileText, ChevronDown, ChevronRight, X, Coffee, CloudRain, Flame, Music, Plus, Trash2, Volume2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, CheckSquare, Square, Target, Maximize2, Minimize2, PenTool, Calendar, Bot, Loader2, History, Wand2, FileText, ChevronDown, ChevronRight, X, Coffee, CloudRain, Flame, Music, Plus, Trash2, Volume2, Layers, Sparkles, Filter } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { GoogleGenAI, Type, Modality } from '@google/genai';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../lib/AuthContext';
 import { db } from '../lib/firebase';
-import { doc, updateDoc, increment, getDoc, collection, query, onSnapshot, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { awardXP } from '../lib/gamification';
+import { doc, updateDoc, increment, getDoc, collection, query, onSnapshot, addDoc, deleteDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 type Subtask = {
@@ -52,10 +53,36 @@ export function ThesisDashboard({ isFocusMode, setIsFocusMode }: ThesisDashboard
     return saved ? parseInt(saved, 10) : 0;
   });
   const [dailyGoal, setDailyGoal] = useState<number>(500);
+  const [goalReachedToday, setGoalReachedToday] = useState(() => {
+    const lastDate = localStorage.getItem('thesis_goalDate');
+    return lastDate === new Date().toLocaleDateString();
+  });
 
   // --- Milestones State ---
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [startDateFilter, setStartDateFilter] = useState<string>('');
+  const [endDateFilter, setEndDateFilter] = useState<string>('');
+
+  const filteredMilestones = milestones.filter(milestone => {
+    if (!startDateFilter && !endDateFilter) return true;
+    const milestoneDate = new Date(milestone.date);
+    milestoneDate.setHours(0, 0, 0, 0);
+    
+    if (startDateFilter) {
+      const start = new Date(startDateFilter);
+      start.setHours(0, 0, 0, 0);
+      if (milestoneDate < start) return false;
+    }
+    
+    if (endDateFilter) {
+      const end = new Date(endDateFilter);
+      end.setHours(23, 59, 59, 999);
+      if (milestoneDate > end) return false;
+    }
+    
+    return true;
+  });
 
   // Persist simple states
   useEffect(() => {
@@ -69,7 +96,13 @@ export function ThesisDashboard({ isFocusMode, setIsFocusMode }: ThesisDashboard
 
   useEffect(() => {
     localStorage.setItem('thesis_wordCount', wordCount.toString());
-  }, [wordCount]);
+    if (wordCount >= dailyGoal && !goalReachedToday) {
+      addXP(100);
+      setGoalReachedToday(true);
+      localStorage.setItem('thesis_goalDate', new Date().toLocaleDateString());
+      setToastMessage('🎉 Meta de palavras alcançada! +100 XP');
+    }
+  }, [wordCount, dailyGoal, goalReachedToday]);
 
   // --- AI Suggestion State ---
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
@@ -84,9 +117,38 @@ export function ThesisDashboard({ isFocusMode, setIsFocusMode }: ThesisDashboard
 
   // --- Toast State ---
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // --- Cozy Room State ---
+  const [eurekas, setEurekas] = useState<{id: string, text: string, timestamp: any}[]>([]);
+  const [isEurekaLoading, setIsEurekaLoading] = useState(false);
+  const [newEureka, setNewEureka] = useState('');
   const [activeSound, setActiveSound] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'users', user.uid, 'eurekas'), orderBy('timestamp', 'desc'), limit(5));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setEurekas(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+    });
+    return unsub;
+  }, [user]);
+
+  const addEureka = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !newEureka.trim()) return;
+    setIsEurekaLoading(true);
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'eurekas'), {
+        text: newEureka,
+        timestamp: serverTimestamp()
+      });
+      setNewEureka('');
+      addXP(15);
+      setToastMessage('💡 Eureka registrado! +15 XP');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsEurekaLoading(false);
+    }
+  };
   const [volume, setVolume] = useState(0.5);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -198,22 +260,13 @@ export function ThesisDashboard({ isFocusMode, setIsFocusMode }: ThesisDashboard
   const addXP = async (amount: number) => {
     if (!user) return;
     try {
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const currentXp = userSnap.data().xp || 0;
-        const currentLevel = userSnap.data().level || 1;
-        const newXp = currentXp + amount;
-        const newLevel = Math.floor(newXp / 500) + 1; // Level up every 500 XP
-        
-        await updateDoc(userRef, {
-          xp: newXp,
-          level: newLevel
-        });
-        
+      const result = await awardXP(user.uid, amount);
+      if (result?.leveledUp) {
+        setToastMessage(`✨ NÍVEL UP! Agora você é nível ${result.newLevel}! 🌿`);
+      } else {
         setToastMessage(`+${amount} XP! 🌟`);
-        setTimeout(() => setToastMessage(null), 3000);
       }
+      setTimeout(() => setToastMessage(null), 3000);
     } catch (e) {
       console.error("Error adding XP", e);
     }
@@ -859,6 +912,38 @@ Por favor, seja direto, encorajador e sugira uma ação clara e acionável.
               </div>
             </div>
 
+            {/* Argument Heatmap (Outside the Box) */}
+            <div className={cn(panelClass, "bg-[#f5f2ed]")}>
+              <h3 className={cn(titleClass, "text-[#1a1a1a]")}>
+                <Layers className="w-6 h-6" />
+                Densidade de Argumentação
+              </h3>
+              <p className="text-[10px] text-[#8b5a2b] mb-4 uppercase font-pixel tracking-tighter">Distribuição de evidências por capítulo</p>
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { label: 'Cap. 1', val: 80, color: 'bg-[#c84b31]' },
+                  { label: 'Cap. 2', val: 40, color: 'bg-[#e67e22]' },
+                  { label: 'Cap. 3', val: 95, color: 'bg-[#27ae60]' },
+                  { label: 'Cap. 4', val: 20, color: 'bg-[#f1c40f]' },
+                  { label: 'Cap. 5', val: 10, color: 'bg-[#95a5a6]' },
+                ].map((cap, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1">
+                    <div className="w-full h-20 bg-[#e9dcc9] rounded-lg relative overflow-hidden border-2 border-[#8b5a2b]/20">
+                      <motion.div 
+                        initial={{ height: 0 }}
+                        animate={{ height: `${cap.val}%` }}
+                        className={cn("absolute bottom-0 w-full", cap.color)}
+                      />
+                    </div>
+                    <span className="text-[8px] font-pixel text-[#8b5a2b]">{cap.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 p-2 bg-white/50 rounded border border-[#8b5a2b]/10 text-[10px] text-[#5c3a21] italic">
+                Tip: O Capítulo 5 precisa de mais evidências iconográficas.
+              </div>
+            </div>
+
           </div>
 
           {/* Right Column: Next Actions & Milestones */}
@@ -990,10 +1075,39 @@ Por favor, seja direto, encorajador e sugira uma ação clara e acionável.
 
             {/* All Milestones */}
             <div className={panelClass}>
-              <h3 className={titleClass}>
-                <CheckSquare className="w-6 h-6" />
-                Todos os Marcos
-              </h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <h3 className={cn(titleClass, "mb-0")}>
+                  <CheckSquare className="w-6 h-6" />
+                  Todos os Marcos
+                </h3>
+                
+                <div className="flex items-center gap-2 bg-[#fff2e6] p-2 rounded-lg border-2 border-[#d79b00]">
+                  <Filter className="w-4 h-4 text-[#b05c00]" />
+                  <div className="flex items-center gap-1">
+                    <input 
+                      type="date" 
+                      value={startDateFilter}
+                      onChange={(e) => setStartDateFilter(e.target.value)}
+                      className="bg-transparent text-xs font-pixel text-[#b05c00] focus:outline-none"
+                    />
+                    <span className="text-[#b05c00] text-xs font-pixel">até</span>
+                    <input 
+                      type="date" 
+                      value={endDateFilter}
+                      onChange={(e) => setEndDateFilter(e.target.value)}
+                      className="bg-transparent text-xs font-pixel text-[#b05c00] focus:outline-none"
+                    />
+                    {(startDateFilter || endDateFilter) && (
+                      <button 
+                        onClick={() => { setStartDateFilter(''); setEndDateFilter(''); }}
+                        className="ml-1 text-[#b05c00] hover:text-[#c84b31]"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
               
               {isLoading ? (
                 <div className="animate-pulse space-y-3">
@@ -1003,70 +1117,113 @@ Por favor, seja direto, encorajador e sugira uma ação clara e acionável.
                 </div>
               ) : (
                 <ul className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                  {milestones.map(milestone => (
-                    <li 
-                      key={milestone.id} 
-                      className={cn(
-                        "flex flex-col gap-2 p-3 rounded border-2 transition-colors",
-                        milestone.completed 
-                          ? "bg-[#e9dcc9] border-transparent opacity-60" 
-                          : "bg-white border-[#d5c4a1] hover:border-[#8b5a2b]"
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <button 
-                          onClick={() => toggleMilestone(milestone.id)} 
-                          className={cn("shrink-0", milestone.completed ? "text-[#4a7c59]" : "text-[#8b5a2b]")}
-                        >
-                          {milestone.completed ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
-                        </button>
-                        <div className="flex-1 min-w-0 flex items-center gap-2">
-                          <p className={cn("truncate font-medium", milestone.completed ? "line-through text-[#8b5a2b]" : "text-[#5c3a21]")}>
-                            {milestone.title}
-                          </p>
-                          {milestone.subtasks && milestone.subtasks.length > 0 && (
-                            <button onClick={() => toggleExpandMilestone(milestone.id)} className="text-[#8b5a2b] hover:text-[#5c3a21]">
-                              {expandedMilestones[milestone.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                            </button>
-                          )}
-                        </div>
-                        <div className="shrink-0 text-xs font-pixel text-[#8b5a2b] flex items-center gap-2">
-                          {new Date(milestone.date).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' })}
-                          {!milestone.completed && (!milestone.subtasks || milestone.subtasks.length === 0) && (
-                            <button 
-                              onClick={() => generateSubtasks(milestone.id, milestone.title)}
-                              disabled={isSubtaskLoading[milestone.id]}
-                              className="p-1 bg-[#fff9e6] rounded border border-[#d5c4a1] hover:bg-[#fdf6e3] hover:border-[#8b5a2b] transition-colors disabled:opacity-50"
-                              title="Dividir em passos com IA"
-                            >
-                              {isSubtaskLoading[milestone.id] ? <Loader2 className="w-3 h-3 animate-spin text-[#b05c00]" /> : <Wand2 className="w-3 h-3 text-[#b05c00]" />}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Subtasks List */}
-                      {milestone.subtasks && milestone.subtasks.length > 0 && expandedMilestones[milestone.id] && (
-                        <div className="ml-8 pl-3 border-l-2 border-[#d5c4a1] space-y-2 mt-1">
-                          {milestone.subtasks.map(subtask => (
-                            <div key={subtask.id} className="flex items-center gap-2">
-                              <button 
-                                onClick={() => toggleSubtask(milestone.id, subtask.id)} 
-                                className={cn("shrink-0", subtask.completed ? "text-[#4a7c59]" : "text-[#8b5a2b]")}
-                              >
-                                {subtask.completed ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  {filteredMilestones.length > 0 ? (
+                    filteredMilestones.map(milestone => (
+                      <li 
+                        key={milestone.id} 
+                        className={cn(
+                          "flex flex-col gap-2 p-3 rounded border-2 transition-colors",
+                          milestone.completed 
+                            ? "bg-[#e9dcc9] border-transparent opacity-60" 
+                            : "bg-white border-[#d5c4a1] hover:border-[#8b5a2b]"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <button 
+                            onClick={() => toggleMilestone(milestone.id)} 
+                            className={cn("shrink-0", milestone.completed ? "text-[#4a7c59]" : "text-[#8b5a2b]")}
+                          >
+                            {milestone.completed ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                          </button>
+                          <div className="flex-1 min-w-0 flex items-center gap-2">
+                            <p className={cn("truncate font-medium", milestone.completed ? "line-through text-[#8b5a2b]" : "text-[#5c3a21]")}>
+                              {milestone.title}
+                            </p>
+                            {milestone.subtasks && milestone.subtasks.length > 0 && (
+                              <button onClick={() => toggleExpandMilestone(milestone.id)} className="text-[#8b5a2b] hover:text-[#5c3a21]">
+                                {expandedMilestones[milestone.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                               </button>
-                              <p className={cn("text-sm", subtask.completed ? "line-through text-[#8b5a2b]" : "text-[#5c3a21]")}>
-                                {subtask.title}
-                              </p>
-                            </div>
-                          ))}
+                            )}
+                          </div>
+                          <div className="shrink-0 text-xs font-pixel text-[#8b5a2b] flex items-center gap-2">
+                            {new Date(milestone.date).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' })}
+                            {!milestone.completed && (!milestone.subtasks || milestone.subtasks.length === 0) && (
+                              <button 
+                                onClick={() => generateSubtasks(milestone.id, milestone.title)}
+                                disabled={isSubtaskLoading[milestone.id]}
+                                className="p-1 bg-[#fff9e6] rounded border border-[#d5c4a1] hover:bg-[#fdf6e3] hover:border-[#8b5a2b] transition-colors disabled:opacity-50"
+                                title="Dividir em passos com IA"
+                              >
+                                {isSubtaskLoading[milestone.id] ? <Loader2 className="w-3 h-3 animate-spin text-[#b05c00]" /> : <Wand2 className="w-3 h-3 text-[#b05c00]" />}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </li>
-                  ))}
+
+                        {/* Subtasks List */}
+                        {milestone.subtasks && milestone.subtasks.length > 0 && expandedMilestones[milestone.id] && (
+                          <div className="ml-8 pl-3 border-l-2 border-[#d5c4a1] space-y-2 mt-1">
+                            {milestone.subtasks.map(subtask => (
+                              <div key={subtask.id} className="flex items-center gap-2">
+                                <button 
+                                  onClick={() => toggleSubtask(milestone.id, subtask.id)} 
+                                  className={cn("shrink-0", subtask.completed ? "text-[#4a7c59]" : "text-[#8b5a2b]")}
+                                >
+                                  {subtask.completed ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                                </button>
+                                <p className={cn("text-sm", subtask.completed ? "line-through text-[#8b5a2b]" : "text-[#5c3a21]")}>
+                                  {subtask.title}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </li>
+                    ))
+                  ) : (
+                    <div className="text-center py-10 text-[#8b5a2b] font-pixel">
+                      Nenhum marco encontrado neste período.
+                    </div>
+                  )}
                 </ul>
               )}
+            </div>
+
+            {/* Eureka Tracker (Outside the Box) */}
+            <div className={cn(panelClass, "bg-[#fdf6e3] border-[#8b5a2b]")}>
+              <h3 className={cn(titleClass, "text-[#5c3a21]")}>
+                <Sparkles className="w-6 h-6 text-[#f1c40f]" />
+                Laboratório de Eurekas
+              </h3>
+              <form onSubmit={addEureka} className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={newEureka}
+                  onChange={(e) => setNewEureka(e.target.value)}
+                  placeholder="Tive uma ideia brilhante..."
+                  className="flex-1 bg-white border-2 border-[#8b5a2b] rounded-lg px-3 py-2 text-[#5c3a21] font-medium focus:outline-none focus:border-[#c84b31]"
+                />
+                <button 
+                  type="submit"
+                  disabled={!newEureka.trim() || isEurekaLoading}
+                  className="bg-[#f1c40f] text-[#5c3a21] border-2 border-[#8b5a2b] rounded-lg p-2 hover:bg-[#f39c12] disabled:opacity-50 transition-colors shadow-[2px_2px_0px_0px_#8b5a2b] active:translate-y-[2px] active:shadow-none"
+                >
+                  {isEurekaLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                </button>
+              </form>
+              <div className="space-y-3">
+                {eurekas.map(eureka => (
+                  <div key={eureka.id} className="p-3 bg-white border-2 border-[#f1c40f]/30 rounded-lg relative group">
+                    <p className="text-sm text-[#5c3a21] leading-relaxed">"{eureka.text}"</p>
+                    <div className="mt-2 flex justify-between items-center">
+                      <span className="text-[8px] font-pixel text-[#8b5a2b] uppercase">Registrado em {new Date(eureka.timestamp?.toDate()).toLocaleString()}</span>
+                    </div>
+                  </div>
+                ))}
+                {eurekas.length === 0 && (
+                  <p className="text-center text-[#8b5a2b] font-medium py-4 text-sm italic">Nenhum Eureka ainda. Continue pesquisando!</p>
+                )}
+              </div>
             </div>
 
           </div>

@@ -80,6 +80,29 @@
         "createdAt": { "type": "timestamp" }
       },
       "required": ["userId", "type", "duration", "timestamp", "createdAt"]
+    },
+    "Eureka": {
+      "title": "Eureka",
+      "description": "A brilliant idea or insight",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "timestamp": { "type": "timestamp" }
+      },
+      "required": ["text", "timestamp"]
+    },
+    "DefenseSession": {
+      "title": "DefenseSession",
+      "description": "A message in a defense simulation session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "persona": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "timestamp" }
+      },
+      "required": ["id", "role", "content", "timestamp"]
     }
   },
   "firestore": {
@@ -102,6 +125,14 @@
     "/users/{userId}/sessions/{sessionId}": {
       "schema": "PomodoroSession",
       "description": "User's pomodoro sessions"
+    },
+    "/users/{userId}/eurekas/{eurekaId}": {
+      "schema": "Eureka",
+      "description": "User's brilliant ideas"
+    },
+    "/users/{userId}/defense_sessions/{sessionId}": {
+      "schema": "DefenseSession",
+      "description": "User's defense simulation messages"
     }
   }
 }

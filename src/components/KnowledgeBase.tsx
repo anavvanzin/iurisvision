@@ -18,6 +18,31 @@ type Message = {
   content: string;
 };
 
+type Persona = 'default' | 'devil' | 'formalist' | 'art_historian';
+
+const PERSONAS: Record<Persona, { name: string; icon: string; instruction: string }> = {
+  default: {
+    name: 'Assistente Padrão',
+    icon: '🤖',
+    instruction: 'Você é um assistente de pesquisa acadêmica equilibrado e preciso.'
+  },
+  devil: {
+    name: 'Advogado do Diabo',
+    icon: '😈',
+    instruction: 'Você é um crítico acadêmico rigoroso. Seu objetivo é encontrar lacunas, contradições e pontos fracos nos argumentos do texto. Seja provocativo e ajude o usuário a fortalecer sua tese através do questionamento.'
+  },
+  formalist: {
+    name: 'O Formalista',
+    icon: '📏',
+    instruction: 'Você é um especialista em metodologia e normas acadêmicas. Foque na estrutura, clareza lógica, rigor metodológico e na precisão dos termos utilizados.'
+  },
+  art_historian: {
+    name: 'Historiador da Arte',
+    icon: '🖼️',
+    instruction: 'Você é um especialista em iconografia e iconologia. Analise o texto focando nos símbolos, na tradição visual, nos significados ocultos das imagens descritas e no contexto histórico-artístico.'
+  }
+};
+
 export function KnowledgeBase() {
   const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -39,6 +64,7 @@ export function KnowledgeBase() {
   });
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [activePersona, setActivePersona] = useState<Persona>('default');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -144,10 +170,10 @@ Pergunta do usuário: ${userMessage}
 `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.1-pro-preview',
         contents: prompt,
         config: {
-          systemInstruction: "Você é um assistente de pesquisa acadêmica focado em analisar textos fornecidos pelo usuário. Seja preciso, cite o texto quando relevante e admita se a informação não constar no material."
+          systemInstruction: `${PERSONAS[activePersona].instruction} Baseie-se EXCLUSIVAMENTE no documento fornecido. Se a resposta não estiver lá, admita. Seja preciso e cite o texto quando relevante.`
         }
       });
 
@@ -460,18 +486,36 @@ Gere o rascunho em formato Markdown.`;
           ) : activeDoc ? (
             // Chat View
             <div className="flex flex-col h-full">
-              <div className="p-4 border-b-4 border-[#8b5a2b] bg-[#e9dcc9] flex justify-between items-center shrink-0">
+              <div className="p-4 border-b-4 border-[#8b5a2b] bg-[#e9dcc9] flex flex-wrap justify-between items-center shrink-0 gap-4">
                 <div className="min-w-0 flex-1">
                   <h3 className="font-pixel text-xl text-[#5c3a21] uppercase truncate pr-4">
                     Conversando com: {activeDoc.title}
                   </h3>
                 </div>
-                <button 
-                  onClick={() => { setEditTitle(activeDoc.title); setEditContent(activeDoc.content); setIsEditing(true); }}
-                  className="shrink-0 font-pixel text-xs px-3 py-1.5 bg-[#d5c4a1] text-[#5c3a21] border-2 border-[#8b5a2b] rounded-md shadow-[2px_2px_0px_0px_rgba(139,90,43,0.3)] hover:bg-[#e9dcc9] active:translate-y-[2px] active:shadow-none transition-all"
-                >
-                  Ver/Editar Texto
-                </button>
+                
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-[#fdf6e3] border-2 border-[#8b5a2b] rounded-lg p-1">
+                    {(Object.keys(PERSONAS) as Persona[]).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setActivePersona(p)}
+                        title={PERSONAS[p].name}
+                        className={cn(
+                          "p-1.5 rounded transition-all",
+                          activePersona === p ? "bg-[#8b5a2b] text-white" : "text-[#8b5a2b] hover:bg-[#e9dcc9]"
+                        )}
+                      >
+                        <span className="text-lg leading-none">{PERSONAS[p].icon}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button 
+                    onClick={() => { setEditTitle(activeDoc.title); setEditContent(activeDoc.content); setIsEditing(true); }}
+                    className="shrink-0 font-pixel text-xs px-3 py-2 bg-[#d5c4a1] text-[#5c3a21] border-2 border-[#8b5a2b] rounded-md shadow-[2px_2px_0px_0px_rgba(139,90,43,0.3)] hover:bg-[#e9dcc9] active:translate-y-[2px] active:shadow-none transition-all"
+                  >
+                    Ver/Editar Texto
+                  </button>
+                </div>
               </div>
               
               {/* Chat Messages */}

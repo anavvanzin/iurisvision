@@ -30,7 +30,9 @@ service cloud.firestore {
              request.resource.data.email is string &&
              request.resource.data.xp is number && request.resource.data.xp >= 0 &&
              request.resource.data.level is number && request.resource.data.level >= 1 &&
-             request.resource.data.createdAt is timestamp;
+             (request.resource.data.createdAt is timestamp || request.resource.data.createdAt is string) &&
+             (!('displayName' in request.resource.data) || request.resource.data.displayName is string) &&
+             (!('badges' in request.resource.data) || request.resource.data.badges is list);
     }
 
     function isValidDocument() {
@@ -47,7 +49,8 @@ service cloud.firestore {
              request.resource.data.title is string && request.resource.data.title.size() <= 200 &&
              request.resource.data.date is string &&
              request.resource.data.completed is bool &&
-             request.resource.data.createdAt is timestamp;
+             request.resource.data.createdAt is timestamp &&
+             (!('subtasks' in request.resource.data) || request.resource.data.subtasks is list);
     }
 
     function isValidTodo() {
@@ -67,36 +70,63 @@ service cloud.firestore {
              request.resource.data.createdAt is timestamp;
     }
 
+    function isValidEureka() {
+      return hasRequiredFields(['text', 'timestamp']) &&
+             request.resource.data.text is string && request.resource.data.text.size() <= 1000 &&
+             request.resource.data.timestamp is timestamp;
+    }
+
+    function isValidDefenseSession() {
+      return hasRequiredFields(['id', 'role', 'content', 'timestamp']) &&
+             request.resource.data.id is string &&
+             request.resource.data.role is string &&
+             request.resource.data.content is string && request.resource.data.content.size() <= 50000 &&
+             request.resource.data.timestamp is timestamp &&
+             (!('persona' in request.resource.data) || request.resource.data.persona is string);
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
     match /users/{userId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId) && isValidUserProfile() && request.resource.data.uid == userId;
-      allow update: if isOwner(userId) && isValidUserProfile() && request.resource.data.uid == resource.data.uid && request.resource.data.createdAt == resource.data.createdAt;
+      allow update: if isOwner(userId) && isValidUserProfile() && request.resource.data.uid == resource.data.uid;
       
       match /documents/{documentId} {
         allow read, delete: if isOwner(userId);
         allow create: if isOwner(userId) && isValidDocument() && request.resource.data.userId == userId;
-        allow update: if isOwner(userId) && isValidDocument() && request.resource.data.userId == resource.data.userId && request.resource.data.createdAt == resource.data.createdAt;
+        allow update: if isOwner(userId) && isValidDocument() && request.resource.data.userId == resource.data.userId;
       }
       
       match /milestones/{milestoneId} {
         allow read, delete: if isOwner(userId);
         allow create: if isOwner(userId) && isValidMilestone() && request.resource.data.userId == userId;
-        allow update: if isOwner(userId) && isValidMilestone() && request.resource.data.userId == resource.data.userId && request.resource.data.createdAt == resource.data.createdAt;
+        allow update: if isOwner(userId) && isValidMilestone() && request.resource.data.userId == resource.data.userId;
       }
 
       match /todos/{todoId} {
         allow read, delete: if isOwner(userId);
         allow create: if isOwner(userId) && isValidTodo() && request.resource.data.userId == userId;
-        allow update: if isOwner(userId) && isValidTodo() && request.resource.data.userId == resource.data.userId && request.resource.data.createdAt == resource.data.createdAt;
+        allow update: if isOwner(userId) && isValidTodo() && request.resource.data.userId == resource.data.userId;
       }
 
       match /sessions/{sessionId} {
         allow read, delete: if isOwner(userId);
         allow create: if isOwner(userId) && isValidSession() && request.resource.data.userId == userId;
-        allow update: if isOwner(userId) && isValidSession() && request.resource.data.userId == resource.data.userId && request.resource.data.createdAt == resource.data.createdAt;
+        allow update: if isOwner(userId) && isValidSession() && request.resource.data.userId == resource.data.userId;
+      }
+
+      match /eurekas/{eurekaId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidEureka();
+        allow update: if isOwner(userId) && isValidEureka();
+      }
+
+      match /defense_sessions/{sessionId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidDefenseSession();
+        allow update: if isOwner(userId) && isValidDefenseSession();
       }
     }
   }

@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { roadmapData } from '@/src/data/roadmap';
-import { CheckCircle2, Circle, ArrowRight, ShieldAlert, Clock } from 'lucide-react';
-import { motion } from 'motion/react';
+import { CheckCircle2, Circle, ArrowRight, ShieldAlert, Clock, ChevronDown, ChevronRight, Star, Flag } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
+import { useAuth } from '../lib/AuthContext';
+import { awardXP } from '../lib/gamification';
 
 type TaskStatus = 'A Fazer' | 'Em Andamento' | 'Concluído';
 
 export function Dashboard({ activeTab }: { activeTab: string }) {
+  const { user } = useAuth();
+  const [expandedTimeline, setExpandedTimeline] = useState<Record<number, boolean>>({});
   const [taskStatuses, setTaskStatuses] = useState<Record<string, TaskStatus>>(() => {
     const initial: Record<string, TaskStatus> = {};
     roadmapData.phases.forEach((phase, i) => {
@@ -25,8 +29,17 @@ export function Dashboard({ activeTab }: { activeTab: string }) {
     setTaskStatuses(prev => {
       const current = prev[key];
       const next: TaskStatus = current === 'A Fazer' ? 'Em Andamento' : current === 'Em Andamento' ? 'Concluído' : 'A Fazer';
+      
+      if (next === 'Concluído' && user) {
+        awardXP(user.uid, 20); // 20 XP for completing a task
+      }
+      
       return { ...prev, [key]: next };
     });
+  };
+
+  const toggleTimeline = (index: number) => {
+    setExpandedTimeline(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
   const panelClass = "bg-[#fdf6e3] border-4 border-[#8b5a2b] rounded-xl shadow-[4px_4px_0px_0px_rgba(139,90,43,0.3)] overflow-hidden";
@@ -125,24 +138,93 @@ export function Dashboard({ activeTab }: { activeTab: string }) {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
             <div className={cn(panelClass, "p-8")}>
               <div className="relative border-l-4 border-[#d5c4a1] ml-3 space-y-12">
-                {roadmapData.timeline.map((item, i) => (
-                  <div key={i} className="relative pl-8">
-                    <div className="absolute -left-[14px] top-1.5 w-6 h-6 rounded-full bg-[#fdf6e3] border-4 border-[#c84b31]" />
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2">
-                      <h4 className="font-pixel text-xl text-[#5c3a21] uppercase tracking-wide">{item.period}</h4>
-                      <span className="text-sm font-pixel text-[#fdf6e3] bg-[#4a7c59] border-2 border-[#2d4a35] px-2.5 py-1 rounded-lg shadow-[2px_2px_0px_0px_#2d4a35]">
-                        {item.progress}% Concluído
-                      </span>
-                    </div>
-                    <p className="text-[#8b5a2b] font-medium">{item.phase}</p>
-                    <div className="mt-4 h-4 w-full bg-[#e9dcc9] rounded-full overflow-hidden border-2 border-[#8b5a2b]">
+                {roadmapData.timeline.map((item, i) => {
+                  const isExpanded = expandedTimeline[i];
+                  const phaseMatch = item.phase.match(/Fase (\d+)/);
+                  const phaseId = phaseMatch ? phaseMatch[1] : null;
+                  const phase = roadmapData.phases.find(p => p.id === phaseId);
+
+                  return (
+                    <div key={i} className="relative pl-8 group">
+                      {/* Marker */}
+                      <div className={cn(
+                        "absolute -left-[14px] top-1.5 w-6 h-6 rounded-full border-4 flex items-center justify-center transition-all z-10",
+                        item.progress === 100 ? "bg-[#4a7c59] border-[#2d4a35]" : "bg-[#fdf6e3] border-[#c84b31]"
+                      )}>
+                        {item.progress === 100 ? (
+                          <CheckCircle2 className="w-3 h-3 text-white" />
+                        ) : item.progress > 0 ? (
+                          <Star className="w-3 h-3 text-[#c84b31] animate-pulse" />
+                        ) : (
+                          <Flag className="w-3 h-3 text-[#8b5a2b]" />
+                        )}
+                      </div>
+
                       <div 
-                        className="h-full bg-[#c84b31] transition-all duration-1000" 
-                        style={{ width: `${item.progress}%` }}
-                      />
+                        onClick={() => toggleTimeline(i)}
+                        className="cursor-pointer hover:bg-[#f5ebd4] p-4 rounded-xl transition-colors -ml-4"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <h4 className="font-pixel text-xl text-[#5c3a21] uppercase tracking-wide">{item.period}</h4>
+                            {isExpanded ? <ChevronDown className="w-4 h-4 text-[#8b5a2b]" /> : <ChevronRight className="w-4 h-4 text-[#8b5a2b]" />}
+                          </div>
+                          <span className={cn(
+                            "text-xs font-pixel px-2.5 py-1 rounded-lg border-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]",
+                            item.progress === 100 ? "bg-[#4a7c59] text-[#fdf6e3] border-[#2d4a35]" : "bg-[#e9dcc9] text-[#8b5a2b] border-[#8b5a2b]"
+                          )}>
+                            {item.progress}% Concluído
+                          </span>
+                        </div>
+                        <p className="text-[#8b5a2b] font-medium text-lg">{item.phase}</p>
+                        
+                        <div className="mt-4 h-3 w-full bg-[#e9dcc9] rounded-full overflow-hidden border-2 border-[#8b5a2b]">
+                          <div 
+                            className="h-full bg-[#c84b31] transition-all duration-1000" 
+                            style={{ width: `${item.progress}%` }}
+                          />
+                        </div>
+
+                        <AnimatePresence>
+                          {isExpanded && phase && (
+                            <motion.div 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-6 pt-6 border-t-2 border-[#d5c4a1] space-y-4">
+                                <p className="text-xs font-pixel text-[#c84b31] uppercase mb-2">Objetivo da Fase:</p>
+                                <p className="text-sm text-[#5c3a21] italic mb-4 bg-[#e9dcc9]/50 p-3 rounded-lg border border-[#d5c4a1]">
+                                  "{phase.goal}"
+                                </p>
+                                
+                                <div className="space-y-4">
+                                  {phase.sections.map((section, sIdx) => (
+                                    <div key={sIdx} className="space-y-2">
+                                      <h5 className="text-sm font-bold text-[#5c3a21] flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#c84b31]" />
+                                        {section.title}
+                                      </h5>
+                                      <ul className="pl-6 space-y-1">
+                                        {section.tasks.map((task, tIdx) => (
+                                          <li key={tIdx} className="text-xs text-[#8b5a2b] flex items-start gap-2">
+                                            <span className="mt-1 opacity-50">•</span>
+                                            {task}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </motion.div>

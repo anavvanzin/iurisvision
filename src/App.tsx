@@ -13,6 +13,8 @@ import { Menu, LogIn, Loader2 } from 'lucide-react';
 import { useAuth } from './lib/AuthContext';
 import { ConnectionMap } from './components/ConnectionMap';
 import { CorpusExplorer } from './components/CorpusExplorer';
+import { AtlasMnemosyne } from './components/AtlasMnemosyne';
+import { DefenseSimulator } from './components/DefenseSimulator';
 
 export default function App() {
   const { user, loading, signIn } = useAuth();
@@ -83,6 +85,10 @@ export default function App() {
             <CorpusExplorer />
           ) : activeTab === 'map' ? (
             <ConnectionMap />
+          ) : activeTab === 'atlas' ? (
+            <AtlasMnemosyne />
+          ) : activeTab === 'defense' ? (
+            <DefenseSimulator />
           ) : activeTab === 'thesis' ? (
             <ThesisDashboard isFocusMode={isFocusMode} setIsFocusMode={setIsFocusMode} />
           ) : (
