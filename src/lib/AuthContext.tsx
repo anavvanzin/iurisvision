@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged, signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider, db } from './firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import type { User } from 'firebase/auth';
+import { getAuthInstance, signInWithGoogle as sharedSignIn, logout, onAuthStateChanged, getDb, doc, getDoc, setDoc, serverTimestamp } from '@shared';
 
 interface AuthContextType {
   user: User | null;
@@ -23,27 +22,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = onAuthStateChanged(getAuthInstance(), async (currentUser) => {
       setUser(currentUser);
-      
+
       if (currentUser) {
-        // Ensure user profile exists
+        const db = getDb();
         const userRef = doc(db, 'users', currentUser.uid);
         const userSnap = await getDoc(userRef);
-        
+
         if (!userSnap.exists()) {
           await setDoc(userRef, {
             uid: currentUser.uid,
             email: currentUser.email,
             displayName: currentUser.displayName || 'Pesquisador',
+            role: 'user',
             xp: 0,
             level: 1,
             badges: [],
-            createdAt: serverTimestamp()
+            createdAt: serverTimestamp(),
           });
         }
       }
-      
+
       setLoading(false);
     });
 
@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      await sharedSignIn();
     } catch (error) {
       console.error('Error signing in:', error);
     }
@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
-      await auth.signOut();
+      await logout();
     } catch (error) {
       console.error('Error signing out:', error);
     }
