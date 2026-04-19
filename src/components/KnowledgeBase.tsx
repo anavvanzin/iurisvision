@@ -393,7 +393,7 @@ Gere o rascunho em formato Markdown.`;
                     <input 
                       type="checkbox" 
                       checked={selectedDocs.has(doc.id)}
-                      onChange={(e) => { e.stopPropagation(); toggleDocSelection(doc.id, e as any); }}
+                      onChange={(e) => { e.stopPropagation(); toggleDocSelection(doc.id, e as unknown as React.MouseEvent<HTMLInputElement>); }}
                       onClick={(e) => e.stopPropagation()}
                       className="w-4 h-4 rounded border-[#8b5a2b] text-[#c84b31] focus:ring-[#c84b31] cursor-pointer shrink-0"
                     />

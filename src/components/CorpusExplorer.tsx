@@ -6,6 +6,10 @@ import { db } from '../lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { GoogleGenAI } from '@google/genai';
 
+interface GoogleSearchTool {
+  googleSearch: Record<string, unknown>;
+}
+
 export function CorpusExplorer() {
   const { user } = useAuth();
   const [noteTitle, setNoteTitle] = useState('');
@@ -48,7 +52,7 @@ Retorne no seguinte formato:
         model: 'gemini-3-flash-preview', // Using flash for fast search
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} } as any],
+          tools: [{ googleSearch: {} }] as GoogleSearchTool[],
           systemInstruction: "Você é um bibliotecário acadêmico especialista em iconografia jurídica. Sua tarefa é gerar citações precisas e encontrar metadados de obras de arte e gravuras históricas."
         }
       });

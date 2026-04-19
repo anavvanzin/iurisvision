@@ -2,9 +2,18 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { useAuth } from '../lib/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs, DocumentSnapshot } from 'firebase/firestore';
 import { Network, Loader2 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
+
+interface FirestoreDoc {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  title?: string;
+  content?: string;
+  [key: string]: unknown;
+}
 
 interface Node extends d3.SimulationNodeDatum {
   id: string;
@@ -14,8 +23,8 @@ interface Node extends d3.SimulationNodeDatum {
 }
 
 interface Link extends d3.SimulationLinkDatum<Node> {
-  source: string;
-  target: string;
+  source: string | Node;
+  target: string | Node;
   value: number;
 }
 
@@ -36,7 +45,10 @@ export function ConnectionMap() {
         // Fetch documents
         const q = query(collection(db, 'users', user.uid, 'documents'));
         const querySnapshot = await getDocs(q);
-        const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+        const docs: FirestoreDoc[] = querySnapshot.docs.map((d: DocumentSnapshot) => {
+          const data = d.data() as FirestoreDoc | undefined;
+          return { id: d.id, ...data } as FirestoreDoc;
+        });
 
         if (docs.length < 2) {
           setError('Adicione pelo menos 2 documentos na Base de Conhecimento para gerar o mapa de conexões.');
@@ -122,10 +134,10 @@ ${docsContext}
       .attr("stroke-width", 1.5)
       .selectAll("circle")
       .data(nodes)
-      .join("circle")
-      .attr("r", 15)
-      .attr("fill", d => d3.schemeCategory10[d.group])
-      .on("mouseover", (event, d) => {
+      .join('circle')
+      .attr('r', 15)
+      .attr('fill', d => d3.schemeCategory10[d.group])
+      .on('mouseover', (event, d) => {
         setTooltip({
           x: event.clientX,
           y: event.clientY,
@@ -133,13 +145,13 @@ ${docsContext}
           content: d.content.substring(0, 150) + (d.content.length > 150 ? '...' : '')
         });
       })
-      .on("mousemove", (event) => {
+      .on('mousemove', (event) => {
         setTooltip(prev => prev ? { ...prev, x: event.clientX, y: event.clientY } : null);
       })
-      .on("mouseout", () => {
+      .on('mouseout', () => {
         setTooltip(null);
       })
-      .call(drag(simulation) as any);
+      .call(drag(simulation) as unknown as (selection: d3.Selection<SVGCircleElement, Node, SVGGElement, unknown>) => void);
 
     node.append("title")
       .text(d => d.title);
@@ -155,12 +167,18 @@ ${docsContext}
       .attr("dx", 20)
       .attr("dy", 5);
 
-    simulation.on("tick", () => {
-      link
-        .attr("x1", d => (d.source as any).x!)
-        .attr("y1", d => (d.source as any).y!)
-        .attr("x2", d => (d.target as any).x!)
-        .attr("y2", d => (d.target as any).y!);
+simulation.on(
+      'tick',
+      () => {
+        const getNodeCoord = (node: string | Node) => {
+          const n = typeof node === 'string' ? nodes.find(x => x.id === node) : node;
+          return n as Node;
+        };
+        link
+          .attr('x1', d => getNodeCoord(d.source).x!)
+          .attr('y1', d => getNodeCoord(d.source).y!)
+          .attr('x2', d => getNodeCoord(d.target).x!)
+          .attr('y2', d => getNodeCoord(d.target).y!);
 
       node
         .attr("cx", d => d.x!)

@@ -10,6 +10,21 @@ import { awardXP } from '../lib/gamification';
 import { doc, updateDoc, increment, getDoc, collection, query, onSnapshot, addDoc, deleteDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
+interface FirestoreDoc {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  title?: string;
+  content?: string;
+  [key: string]: unknown;
+}
+
+type EurekaItem = {
+  id: string;
+  text: string;
+  timestamp: unknown;
+};
+
 type Subtask = {
   id: string;
   title: string;
@@ -126,7 +141,11 @@ export function ThesisDashboard({ isFocusMode, setIsFocusMode }: ThesisDashboard
     if (!user) return;
     const q = query(collection(db, 'users', user.uid, 'eurekas'), orderBy('timestamp', 'desc'), limit(5));
     const unsub = onSnapshot(q, (snapshot) => {
-      setEurekas(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      const eurekasData: EurekaItem[] = snapshot.docs.map(d => {
+        const data = d.data() as FirestoreDoc | undefined;
+        return { id: d.id, text: (data?.content || data?.text || '') as string, timestamp: data?.timestamp };
+      });
+      setEurekas(eurekasData);
     });
     return unsub;
   }, [user]);
@@ -563,7 +582,14 @@ Por favor, seja direto, encorajador e sugira uma ação clara e acionável.
     if (!musicPrompt.trim()) return;
     
     // Check for API key selection for Lyria
-    const aiStudio = (window as any).aistudio;
+    interface AIStudioWindow {
+      aistudio?: {
+        hasSelectedApiKey(): Promise<boolean>;
+        openSelectKey(): Promise<void>;
+      };
+    }
+    const win = window as unknown as AIStudioWindow;
+    const aiStudio = win.aistudio;
     if (aiStudio && !(await aiStudio.hasSelectedApiKey())) {
       await aiStudio.openSelectKey();
       // Proceed after selection
